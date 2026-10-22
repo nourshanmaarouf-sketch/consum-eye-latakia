@@ -75,3 +75,5 @@ main.go>*{animation:rise .3s ease both}main.go>*:nth-child(2){animation-delay:.0
 #sp{background:radial-gradient(circle at 50% 40%,#134031,#06170f 72%)!important}
 #sp:after{content:"";width:0;height:2px;background:linear-gradient(90deg,transparent,#d4af37,transparent);margin-top:18px;animation:ln 1.2s .3s forwards}
 .mdb{background:#fff;border-radius:16px;padding:18px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px;color:#181c1b;border-top:3px solid #b08d2e}#mdt{font-weight:700;font-size:15px;line-height:1.7}
+
+.mp{height:260px;border-radius:12px;border:1px solid var(--bd);margin:6px 0;direction:ltr;z-index:0}.leaflet-container{font-family:inherit}.leaflet-popup-content{direction:rtl;text-align:right;line-height:1.7}

@@ -424,7 +424,7 @@ const VIEWS = {
 <div id="rnote" class="hint"></div>
 ${fld('rn', 'الاسم الكامل')}${fld('rph', 'رقم الهاتف المحمول', 'inputmode="tel" dir="ltr" placeholder="09XXXXXXXX"')}
 <div id="rc">${fld('ra', 'الحي / المنطقة')}</div>
-<div id="rm">${fld('rb', 'اسم المحل / الشركة')}${fld('rg', 'رقم السجل التجاري (اختياري)', 'inputmode="numeric"')}${fld('rd', 'عنوان المحل / الشركة')}<button type="button" class="srch" data-act="getloc" style="width:100%;justify-content:center;font:inherit;margin:12px 0 4px">${ic('info', 18)} تحديد موقع المحل على الخريطة</button><div id="rlt" class="hint">${ST.loc ? 'تم تحديد الموقع ✓' : 'يساعد المواطن في الوصول إليك (اختياري)'}</div></div>
+<div id="rm">${fld('rb', 'اسم المحل / الشركة')}${fld('rg', 'رقم السجل التجاري (اختياري)', 'inputmode="numeric"')}${fld('rd', 'عنوان المحل / الشركة')}<label>موقع المحل: اضغط على الخريطة أو اسحب العلامة</label><div id="pm" class="mp"></div><button type="button" class="srch" data-act="getloc" style="width:100%;justify-content:center;font:inherit;margin:8px 0 4px">${ic('info', 18)} تحديد موقعي الحالي</button><div id="rlt" class="hint">${ST.loc ? 'تم تحديد الموقع ✓' : 'يساعد المواطن في الوصول إليك'}</div></div>
 ${fld('rpw', 'كلمة المرور (6 أحرف على الأقل)', 'dir="ltr" autocomplete="new-password"', 'password')}${fld('rpw2', 'تأكيد كلمة المرور', 'dir="ltr" autocomplete="new-password"', 'password')}
 <button class="btn" data-act="register" style="margin:14px 0 10px">${ic('check')} إنشاء الحساب</button>
 <button class="srch" data-act="go" data-v="login" style="width:100%;justify-content:center;font:inherit;margin:0">لدي حساب، تسجيل الدخول</button></div>`,
@@ -462,6 +462,7 @@ ${s ? `<div class="pr"><div><span>أدنى سعر</span><b style="color:var(--gr
     const s = Q.stat(i.id, 'retail'), L = s ? s.L.slice().sort((a, b) => a.min - b.min) : [], U = id => Q.user(id);
     return `${backBtn()}<div class="card"><h2>${esc(i.name)} <span class="sub">(${esc(i.unit)})</span></h2><div class="sub">${esc(i.cat)} · ${esc(i.typ)}${i.bc ? ' · باركود ' + esc(i.bc) : ''}</div>
 <div class="acts"><button class="btn sm" data-act="cartadd" data-id="${esc(i.id)}">${ic('plus', 16)} أضف لطلب بضاعة</button><button class="btn sm ghost" data-act="go" data-v="c-newcomp" data-id="${esc(i.id)}">تقديم شكوى</button></div></div>
+${L.some(x => { const u = U(x.mid); return u && u.biz && u.biz.loc; }) ? '<div class="card"><h2>مواقع المحلات على الخريطة</h2><div id="im" class="mp"></div></div>' : ''}
 <div class="row" style="margin:4px 0 10px"><h2>الأسعار لدى المحلات</h2>${tag(L.length + ' محل')}</div>
 ${L.map((x, k) => { const u = U(x.mid), old = Date.now() - x.t > 7 * DAY; return `<div class="card"><div class="row"><div><h2>${esc(dname(u))}</h2><div class="sub">${esc(u.biz.addr)}</div>${mapA(u)}</div>${k === 0 ? tag('الأرخص') : ''}</div>
 <div class="pr"><div><span>الحد الأدنى</span><b style="color:var(--gr)">${fmt(x.min)} <small>ل.س</small></b></div><div><span>الحد الأعلى</span><b style="color:var(--red)">${fmt(x.max)} <small>ل.س</small></b></div></div>
@@ -650,6 +651,8 @@ function render() {
 }
 function afterRender() {
   if (V === 'register') ACT.rtype({ val: ST.rt });
+  if (V === 'c-item') { const s = Q.stat(VP.id, 'retail'); if (s && $('im')) initShops(s.L); }
+  if (V !== 'register' && V !== 'c-item' && MAP) { MAP.remove(); MAP = null; }
   if ($('q')) $('q').oninput = e => { ST.q = e.target.value; $('lst').innerHTML = VIEWS.pList(); };
   if ($('lpw')) $('lpw').onkeydown = e => { if (e.key === 'Enter') ACT.login(); };
   if ($('ra') && V === 'c-newreq') $('ra').oninput = e => { ST.ra = e.target.value; };
@@ -677,6 +680,7 @@ const ACT = {
     ST.rt = d.val;
     document.querySelectorAll('.seg [data-act="rtype"]').forEach(b => b.classList.toggle('on', b.dataset.val === ST.rt));
     $('rc').classList.toggle('hide', ST.rt !== 'citizen'); $('rm').classList.toggle('hide', ST.rt === 'citizen');
+    if (V === 'register' && ST.rt !== 'citizen') setTimeout(initPick, 30);
     $('rnote').textContent = ST.rt === 'citizen' ? 'حساب المواطن يُفعَّل مباشرة بعد التسجيل.' : 'حساب التاجر يُراجَع من الرقابة التموينية، ويُفعَّل بعد الموافقة عليه.';
   },
   async setup() {
@@ -731,8 +735,10 @@ const ACT = {
   getloc: () => {
     if (!navigator.geolocation) return toast('الجهاز لا يدعم تحديد الموقع', 'e');
     $('rlt').textContent = 'جارٍ تحديد الموقع...';
-    navigator.geolocation.getCurrentPosition(p => { ST.loc = { lat: p.coords.latitude, lng: p.coords.longitude }; $('rlt').textContent = 'تم تحديد الموقع ✓'; },
-      () => { $('rlt').textContent = 'تعذّر التحديد، فعّل الموقع وأعد المحاولة'; }, { enableHighAccuracy: true, timeout: 15000 });
+    navigator.geolocation.getCurrentPosition(p => {
+      if (MAP) setPin(L.latLng(p.coords.latitude, p.coords.longitude), true);
+      else { ST.loc = { lat: p.coords.latitude, lng: p.coords.longitude }; $('rlt').textContent = 'تم تحديد الموقع ✓'; }
+    }, () => { $('rlt').textContent = 'تعذّر التحديد، فعّل الموقع أو اضغط على الخريطة'; }, { enableHighAccuracy: true, timeout: 15000 });
   },
   rmprice: d => ask('حذف هذه المادة من قائمتك؟ يبقى سجل أسعارها السابق للرقابة.', () => run(async () => { await API.removeMine(d.id); toast('تم الحذف', 'ok'); render(); })),
   suspend: d => ask('إيقاف هذا الحساب؟ ستختفي أسعاره من الدليل.', () => run(async () => { await API.setStatus(d.id, 'suspended'); toast('تم الإيقاف', 'ok'); render(); })),
@@ -748,6 +754,43 @@ const dispatch = e => { const t = e.target.closest('[data-act]'); if (!t) return
 m.addEventListener('click', dispatch);
 nav.addEventListener('click', dispatch);
 window.addEventListener('popstate', () => { const s = STACK.pop(); if (s) { V = s[0]; VP = s[1]; render(); } });
+
+/* ---------- الخرائط (Leaflet + OpenStreetMap) ---------- */
+const LAT = [35.5317, 35.7919];
+let MAP = null, PIN = null;
+function mapBase(id, c, z) {
+  if (MAP) { MAP.remove(); MAP = null; }
+  const el = $(id); if (!el) return null;
+  if (typeof L === 'undefined') { el.innerHTML = '<div class="hint" style="padding:18px;text-align:center;direction:rtl">الخريطة تحتاج اتصالاً بالإنترنت</div>'; return null; }
+  MAP = L.map(el).setView(c, z);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(MAP);
+  return MAP;
+}
+function setPin(ll, fly) {
+  ST.loc = { lat: ll.lat, lng: ll.lng };
+  if (!MAP) return;
+  if (PIN) PIN.setLatLng(ll); else { PIN = L.marker(ll, { draggable: true }).addTo(MAP); PIN.on('dragend', () => setPin(PIN.getLatLng())); }
+  if (fly) MAP.setView(ll, 16);
+  const h = $('rlt'); if (h) h.textContent = 'تم تحديد الموقع ✓';
+}
+function initPick() {
+  PIN = null;
+  const mp = mapBase('pm', ST.loc ? [ST.loc.lat, ST.loc.lng] : LAT, ST.loc ? 16 : 12); if (!mp) return;
+  mp.on('click', e => setPin(e.latlng));
+  if (ST.loc) setPin(L.latLng(ST.loc.lat, ST.loc.lng));
+  setTimeout(() => mp.invalidateSize(), 80);
+}
+function initShops(list) {
+  const mp = mapBase('im', LAT, 12); if (!mp) return;
+  const pts = [];
+  list.forEach(x => {
+    const u = Q.user(x.mid); if (!u || !u.biz || !u.biz.loc) return;
+    const ll = [u.biz.loc.lat, u.biz.loc.lng]; pts.push(ll);
+    L.marker(ll).addTo(mp).bindPopup('<b>' + esc(dname(u)) + '</b><br>' + esc(ROLEN[u.role]) + '<br>' + fmt(x.min) + ' – ' + fmt(x.max) + ' ل.س<br>' + esc(u.biz.addr) + '<br>آخر تحديث ' + dt(x.t));
+  });
+  if (pts.length) mp.fitBounds(pts, { padding: [30, 30], maxZoom: 16 });
+  setTimeout(() => mp.invalidateSize(), 80);
+}
 
 /* ---------- الباركود ---------- */
 const scan = async () => {
